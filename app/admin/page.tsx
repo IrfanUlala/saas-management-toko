@@ -17,78 +17,33 @@ import {
   ArrowRight,
 } from "lucide-react";
 
-const menus = [
+const menuGroups = [
   {
-    title: "Kasir",
-    description: "Kelola transaksi penjualan dan pembayaran pelanggan.",
-    icon: ShoppingCart,
-    href: "/kasir",
+    title: "Transaksi",
+    items: [
+      { title: "Kasir", icon: ShoppingCart, href: "/kasir" },
+      { title: "Pembelian", icon: Truck, href: "/pembelian" },
+      { title: "Pembayaran", icon: CreditCard, href: "/pembayaran" },
+    ],
   },
   {
-    title: "Pembelian",
-    description: "Kelola pembelian barang dari supplier.",
-    icon: Truck,
-    href: "/pembelian",
+    title: "Inventaris",
+    items: [
+      { title: "Produk", icon: Package, href: "/produk" },
+      { title: "Stok & Gudang", icon: Warehouse, href: "/gudang" },
+      { title: "Opname", icon: ClipboardCheck, href: "/opname" },
+      { title: "Supplier", icon: Boxes, href: "/supplier" },
+    ],
   },
   {
-    title: "Stok & Gudang",
-    description: "Pantau stok, mutasi, dan lokasi penyimpanan barang.",
-    icon: Warehouse,
-    href: "/gudang",
-  },
-  {
-    title: "Opname",
-    description: "Cek dan sesuaikan stok fisik dengan sistem.",
-    icon: ClipboardCheck,
-    href: "/opname",
-  },
-  {
-    title: "Produk",
-    description: "Kelola produk, kategori, harga, dan barcode.",
-    icon: Package,
-    href: "/produk",
-  },
-  {
-    title: "Supplier",
-    description: "Kelola data supplier dan riwayat pembelian.",
-    icon: Boxes,
-    href: "/supplier",
-  },
-  {
-    title: "Karyawan",
-    description: "Kelola data dan akses karyawan toko.",
-    icon: Users,
-    href: "/karyawan",
-  },
-  {
-    title: "Absensi",
-    description: "Pantau kehadiran dan jam kerja karyawan.",
-    icon: UserCheck,
-    href: "/absensi",
-  },
-  {
-    title: "Kas & Pengeluaran",
-    description: "Catat pemasukan, pengeluaran, dan kas toko.",
-    icon: Wallet,
-    href: "/kas",
-  },
-  {
-    title: "Pembayaran",
-    description: "Kelola metode pembayaran dan transaksi.",
-    icon: CreditCard,
-    href: "/pembayaran",
-  },
-  {
-    title: "Laporan",
-    description: "Lihat laporan penjualan, stok, dan keuangan.",
-    icon: BarChart3,
-    href: "/laporan",
-  },
-  {
-    title: "Pengaturan",
-    description: "Atur toko, cabang, pengguna, dan sistem.",
-    icon: Settings,
-    href: "/pengaturan",
+    title: "Manajemen",
+    items: [
+      { title: "Karyawan", icon: Users, href: "/karyawan" },
+      { title: "Absensi", icon: UserCheck, href: "/absensi" },
+      { title: "Kas & Pengeluaran", icon: Wallet, href: "/kas" },
+      { title: "Laporan", icon: BarChart3, href: "/laporan" },
+      { title: "Pengaturan", icon: Settings, href: "/pengaturan" },
+    ],
   },
 ];
 
@@ -150,46 +105,33 @@ export default function DashboardPage() {
       </section>
 
       {/* Menu */}
-      <section>
-        <div className="mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">
-            Menu Toko
-          </h2>
-
-          <p className="mt-1 text-sm text-gray-500">
-            Pilih menu untuk mengelola operasional toko.
-          </p>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {menus.map((menu) => {
-            const Icon = menu.icon;
-
-            return (
-              <a
-                key={menu.title}
-                href={menu.href}
-                className="group rounded-2xl border border-gray-200 bg-white p-5 transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gray-50 transition-colors group-hover:bg-primary/10">
-                    <Icon className="h-5 w-5 text-gray-600 transition-colors group-hover:text-primary" />
-                  </div>
-
-                  <ArrowRight className="h-4 w-4 text-gray-300 transition-all group-hover:translate-x-1 group-hover:text-primary" />
-                </div>
-
-                <h3 className="mt-5 font-semibold text-gray-900">
-                  {menu.title}
-                </h3>
-
-                <p className="mt-2 text-sm leading-6 text-gray-500">
-                  {menu.description}
-                </p>
-              </a>
-            );
-          })}
-        </div>
+      <section className="space-y-6">
+        {menuGroups.map((group) => (
+          <div key={group.title}>
+            <h2 className="mb-3 text-sm font-bold uppercase tracking-wider text-gray-400">
+              {group.title}
+            </h2>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {group.items.map((menu) => {
+                const Icon = menu.icon;
+                return (
+                  <a
+                    key={menu.title}
+                    href={menu.href}
+                    className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-white p-4 text-center transition-all hover:border-primary/20 hover:bg-primary/5 hover:shadow-sm"
+                  >
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gray-50 text-gray-600">
+                      <Icon className="h-5 w-5" />
+                    </div>
+                    <span className="text-xs font-medium text-gray-700">
+                      {menu.title}
+                    </span>
+                  </a>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </section>
 
       {/* Operational Alert */}
