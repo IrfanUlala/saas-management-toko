@@ -3,4 +3,5 @@
 @theme {
   --color-primary: #008000;
   --color-secondary: #006400;
+  --font-sans: var(--font-nunito), sans-serif;
 }
