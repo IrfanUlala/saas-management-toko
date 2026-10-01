@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import PWAInstallButton from "@/components/PWAInstallButton";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -15,8 +16,8 @@ const geistMono = Geist_Mono({
 });
 
 const siteConfig = {
-  name: "Management Toko",
-  title: "Management Toko — Kelola Toko, Kasir, & Stok Lebih Mudah",
+  name: "Toko Maju & Nyaman",
+  title: "Toko Maju & Nyaman — Kelola Toko, Kasir, & Stok Lebih Mudah",
   description:
     "Aplikasi manajemen toko terpadu untuk mengelola penjualan POS kasir, stok gudang, absensi karyawan, multi-role pengguna, hingga laporan keuangan dalam satu sistem.",
   url: "https://example.id", // Ganti dengan domain asli Anda
@@ -152,8 +153,8 @@ export const viewport: Viewport = {
   maximumScale: 5,
   viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#2563EB" },
-    { media: "(prefers-color-scheme: dark)", color: "#1E40AF" },
+    { media: "(prefers-color-scheme: light)", color: "#008000" },
+    { media: "(prefers-color-scheme: dark)", color: "#006400" },
   ],
 };
 
@@ -169,6 +170,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col bg-white text-gray-900">
         {children}
+        <PWAInstallButton />
       </body>
     </html>
   );
