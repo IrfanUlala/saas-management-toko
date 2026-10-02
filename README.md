@@ -1,4 +1,6 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Toman — Toko Maju & Nyaman
+
+Aplikasi manajemen toko terpadu berbasis [Next.js](https://nextjs.org) (App Router) untuk mengelola penjualan POS kasir, stok gudang, absensi karyawan, multi-role pengguna, dan laporan keuangan dalam satu sistem.
 
 ## Getting Started
 
@@ -16,9 +18,38 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Halaman beranda ada di `app/(main)/page.tsx` dan akan diperbarui otomatis saat Anda mengedit file.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Proyek ini memakai [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) untuk mengoptimalkan dan memuat font Nunito secara otomatis.
+
+## Struktur Folder
+
+```text
+.
+├── app/                  # Routing, layout, dan komposisi halaman (Next.js App Router)
+│   ├── (main)/           # Route group area publik (beranda, about)
+│   ├── admin/            # Area admin
+│   ├── auth/             # Halaman autentikasi
+│   ├── layout.tsx        # Root layout (font, metadata, PWA install button)
+│   └── globals.css
+├── components/
+│   ├── ui/               # Primitives generik & reusable (button, input, checkbox, select)
+│   └── layout/           # Shell/navigasi yang dipakai lintas route
+│       ├── admin/        # Header, footer, navigation area admin
+│       ├── main/         # Header, footer, slides area publik
+│       └── pwa-install-button.tsx  # Banner instalasi PWA global
+├── features/             # Logika khusus per domain: buy/, inventory/, profile/, sell/
+│                         # (diisi komponen/hooks/services saat fitur diimplementasikan)
+├── public/               # Aset statis yang disajikan langsung
+└── review/               # Catatan review/dokumentasi teknis
+```
+
+Konvensi:
+
+- `app/` hanya mengatur URL, layout, dan komposisi halaman; logika domain tidak ditaruh di sana.
+- Komponen yang hanya relevan untuk satu domain diletakkan di `features/<domain>/`; yang reusable lintas fitur di `components/`.
+- Nama file memakai huruf kecil (`button.tsx`, `pwa-install-button.tsx`).
+- Jangan menambah folder baru kecuali ada file nyata yang membutuhkannya.
 
 ## Learn More
 

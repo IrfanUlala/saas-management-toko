@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Nunito } from "next/font/google";
 import "./globals.css";
-import PWAInstallButton from "@/components/PWAInstallButton";
+import PWAInstallButton from "@/components/layout/pwa-install-button";
 
 const nunito = Nunito({
   variable: "--font-nunito",

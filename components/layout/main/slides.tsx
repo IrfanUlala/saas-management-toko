@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { X, LayoutDashboard, Package, FileText, Settings, LogIn, Search, Info, HelpCircle, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useRouter } from "next/navigation";
 
 export function SearchSlide() {
   const [isOpen, setIsOpen] = useState(false);
@@ -40,6 +41,7 @@ export function SearchSlide() {
 }
 
 export function MobileMenuSlide() {
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
@@ -83,7 +85,7 @@ export function MobileMenuSlide() {
         </div>
 
         <div className="absolute bottom-0 left-0 w-full p-6 border-t border-gray-100 bg-gray-50">
-          <Button className="w-full gap-2 py-6 text-base font-semibold shadow-lg">
+          <Button className="w-full gap-2 py-6 text-base font-semibold shadow-lg" onClick={() => router.push('/auth')}>
             <LogIn className="w-5 h-5" />
             Masuk / Daftar
           </Button>

@@ -3,8 +3,10 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useRouter } from "next/navigation";
 
 export default function AuthPage() {
+  const router = useRouter();
   const [step, setStep] = useState<"login" | "otp">("login");
 
   return (
@@ -21,7 +23,7 @@ export default function AuthPage() {
           <div className="space-y-4">
             <Button variant="outline" className="w-full gap-2">Google</Button>
             <Button variant="outline" className="w-full gap-2">Facebook</Button>
-            
+
             <div className="relative my-6">
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-gray-200"></div>
@@ -37,7 +39,7 @@ export default function AuthPage() {
         ) : (
           <div className="space-y-4">
             <Input label="Kode OTP" placeholder="Masukkan 6 digit kode" />
-            <Button className="w-full">Verifikasi</Button>
+            <Button className="w-full" onClick={() => router.push('/admin')}>Verifikasi</Button>
             <Button variant="ghost" className="w-full" onClick={() => setStep("login")}>Kembali</Button>
           </div>
         )}

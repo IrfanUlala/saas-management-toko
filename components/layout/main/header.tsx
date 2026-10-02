@@ -1,6 +1,7 @@
 "use client";
 
 import { Menu, Search } from "lucide-react";
+import Link from "next/link";
 
 export default function Header() {
   return (
@@ -28,9 +29,9 @@ export default function Header() {
           </button>
           
           <div className="hidden md:flex items-center gap-4">
-            <button className="bg-primary text-white px-5 py-2 rounded-full text-sm font-medium hover:bg-secondary transition-all shadow-md hover:shadow-lg">
+            <Link href={'/auth'} className="bg-primary text-white px-5 py-2 rounded-full text-sm font-medium hover:bg-secondary transition-all shadow-md hover:shadow-lg">
               Masuk / Daftar
-            </button>
+            </Link>
           </div>
 
           <button 
