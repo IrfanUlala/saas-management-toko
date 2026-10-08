@@ -94,9 +94,10 @@ export default function AddFeature() {
   }, [highlighted]);
 
   function addProduct(product: Product, clearInput = true) {
-    if (product.stock <= 0) {
+    const existing = cart.find((item) => item.product.id === product.id);
+    if (product.stock <= 0 || (existing && existing.quantity >= product.stock)) {
       setNotice({ type: "error", text: `Stok ${product.name} habis.` });
-      return;
+      return false;
     }
     setCart((items) => {
       const found = items.find((i) => i.product.id === product.id);
@@ -112,6 +113,7 @@ export default function AddFeature() {
     setShowMatches(false);
     if (clearInput) setQuery("");
     inputRef.current?.focus();
+    return true;
   }
 
   function updateQuantity(id: string, change: number) {
@@ -297,7 +299,9 @@ export default function AddFeature() {
                   setQuery(value);
                   const product = products.find((item) => item.barcode === value || item.code.toLowerCase() === value.toLowerCase());
                   if (product) {
-                    addProduct(product);
+                    if (addProduct(product)) {
+                      setNotice({ type: "success", text: `${product.name} x1 ditambahkan.` });
+                    }
                   } else {
                     setShowMatches(true);
                     inputRef.current?.focus();
@@ -387,52 +391,59 @@ export default function AddFeature() {
                 {cart.map(({ product, quantity }) => (
                   <li
                     key={product.id}
-                    className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+                    className="space-y-3 px-4 py-4 sm:flex sm:items-center sm:justify-between sm:gap-4 sm:space-y-0"
                   >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{product.name}</p>
-                      <p className="mt-0.5 text-xs text-gray-500">
-                        {product.code} · {currency(product.price)} / pcs ·{" "}
-                        <span
-                          className={
-                            quantity >= product.stock ? "font-medium text-orange-600" : ""
-                          }
-                        >
-                          Stok {product.stock}
-                        </span>
+                    <div className="min-w-0 sm:flex-1">
+                      <p className="wrap-break-word text-sm font-semibold leading-5 text-gray-900">
+                        {product.name}
+                      </p>
+                      <p className="mt-1 text-xs text-gray-500">
+                        Kode {product.code} <span aria-hidden="true">·</span> {currency(product.price)} / pcs
+                      </p>
+                      <p className={`mt-1 text-xs ${quantity >= product.stock ? "font-medium text-orange-600" : "text-gray-500"}`}>
+                        Stok tersedia: {product.stock} pcs
+                        {quantity >= product.stock && " · Batas stok tercapai"}
                       </p>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        aria-label={`Kurangi ${product.name}`}
-                        onClick={() => updateQuantity(product.id, -1)}
-                      >
-                        <Minus size={14} />
-                      </Button>
-                      <span className="w-8 text-center text-sm font-semibold tabular-nums">
-                        {quantity}
-                      </span>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        aria-label={`Tambah ${product.name}`}
-                        disabled={quantity >= product.stock}
-                        onClick={() => updateQuantity(product.id, 1)}
-                      >
-                        <Plus size={14} />
-                      </Button>
-                      <span className="w-28 text-right text-sm font-semibold tabular-nums">
-                        {currency(product.price * quantity)}
-                      </span>
+                    <div className="flex items-center justify-between gap-3 sm:justify-end">
+                      <div className="inline-flex shrink-0 items-center rounded-lg border border-gray-200 bg-gray-50 p-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-9 w-9 p-0"
+                          aria-label={`Kurangi ${product.name}`}
+                          onClick={() => updateQuantity(product.id, -1)}
+                        >
+                          <Minus size={14} />
+                        </Button>
+                        <span className="min-w-9 px-1 text-center text-sm font-semibold tabular-nums" aria-label={`Jumlah ${quantity} pcs`}>
+                          {quantity}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-9 w-9 p-0"
+                          aria-label={`Tambah ${product.name}`}
+                          disabled={quantity >= product.stock}
+                          onClick={() => updateQuantity(product.id, 1)}
+                        >
+                          <Plus size={14} />
+                        </Button>
+                      </div>
+                      <div className="min-w-0 flex-1 text-right sm:min-w-28 sm:flex-none">
+                        <p className="text-[11px] text-gray-500 sm:hidden">Total item</p>
+                        <p className="text-sm font-bold tabular-nums text-gray-900">
+                          {currency(product.price * quantity)}
+                        </p>
+                      </div>
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
+                        className="h-9 w-9 shrink-0 p-0"
                         aria-label={`Hapus ${product.name}`}
                         onClick={() => removeItem(product.id)}
                       >
