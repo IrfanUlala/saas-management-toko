@@ -1,13 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Download } from "lucide-react";
+import { Download, X } from "lucide-react";
 import Image from "next/image";
 
 export default function PWAInstallButton() {
+  const pathname = usePathname();
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isVisible, setIsVisible] = useState(false);
+  const [isDismissed, setIsDismissed] = useState(false);
+
+  useEffect(() => {
+    if (pathname === "/") setIsDismissed(false);
+  }, [pathname]);
 
   useEffect(() => {
     const handler = (e: any) => {
@@ -37,7 +44,9 @@ export default function PWAInstallButton() {
     setIsVisible(false);
   };
 
-  if (!isVisible) return null;
+  const handleDismiss = () => setIsDismissed(true);
+
+  if (!isVisible || isDismissed) return null;
 
   return (
     <div className="fixed bottom-0 left-0 right-0 p-4 md:px-6 bg-white/90 backdrop-blur-md border-t border-gray-200 z-50 flex justify-center items-center animate-in slide-in-from-bottom duration-300">
@@ -57,13 +66,23 @@ export default function PWAInstallButton() {
             <p className="text-xs text-gray-500">Akses lebih mudah & cepat</p>
           </div>
         </div>
-        <Button
-          onClick={handleInstallClick}
-          className="bg-primary hover:bg-secondary text-white px-4 py-2 rounded-full text-sm font-medium transition-colors"
-        >
-          <Download className="w-4 h-4 mr-2" />
-          Instal
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={handleInstallClick}
+            className="bg-primary hover:bg-secondary text-white px-4 py-2 rounded-full text-sm font-medium transition-colors"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Instal
+          </Button>
+          <Button
+            onClick={handleDismiss}
+            variant="ghost"
+            size="sm"
+            aria-label="Tutup pemberitahuan instalasi"
+          >
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
       </div>
     </div>
   );

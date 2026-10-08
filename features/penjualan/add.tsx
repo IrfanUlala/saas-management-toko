@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import CameraBarcode from "@/components/camera-barcode";
 import {
   Barcode,
   Check,
@@ -214,9 +215,10 @@ export default function AddFeature() {
               Gunakan nama, kode produk, atau barcode. Gunakan ↑/↓ dan Enter untuk memilih.
             </p>
 
-            <div className="relative mt-3">
-              <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-gray-400" />
-              <Input
+            <div className="mt-3 flex items-start gap-2">
+              <div className="relative min-w-0 flex-1">
+                <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Input
                 ref={inputRef}
                 id="identifier"
                 value={query}
@@ -235,7 +237,7 @@ export default function AddFeature() {
                 onFocus={() => query && setShowMatches(true)}
                 autoComplete="off"
                 placeholder="Nama / kode / barcode barang"
-                className="h-11 pl-9 border-gray-200 shadow-none focus-visible:ring-2 focus-visible:ring-blue-100"
+                className="pl-9 border-gray-200 shadow-none focus-visible:ring-2 focus-visible:ring-blue-100"
               />
               {query && (
                 <button
@@ -288,7 +290,20 @@ export default function AddFeature() {
                 <div className="absolute z-20 mt-1 w-full rounded-lg border bg-white p-4 text-sm text-gray-500 shadow-lg">
                   Barang tidak ditemukan. Periksa nama, kode, atau barcode.
                 </div>
-              )}
+                )}
+              </div>
+              <CameraBarcode
+                onChange={(value) => {
+                  setQuery(value);
+                  const product = products.find((item) => item.barcode === value || item.code.toLowerCase() === value.toLowerCase());
+                  if (product) {
+                    addProduct(product);
+                  } else {
+                    setShowMatches(true);
+                    inputRef.current?.focus();
+                  }
+                }}
+              />
             </div>
           </div>
 
