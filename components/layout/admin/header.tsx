@@ -4,6 +4,7 @@ import {
   Bell,
   ChevronDown,
   MapPin,
+  MessageCircleQuestion,
   User,
 } from "lucide-react";
 
@@ -43,6 +44,14 @@ export default function AdminHeader() {
 
         {/* Right: Notification & Account */}
         <div className="flex items-center gap-2 md:gap-4">
+          <button
+            type="button"
+            className="relative flex h-10 w-10 items-center justify-center rounded-xl text-gray-500 transition hover:bg-gray-100 hover:text-gray-900"
+            aria-label="Bantuan"
+            title="Bantuan"
+          >
+            <MessageCircleQuestion className="h-5 w-5" />
+          </button>
           {/* Notification */}
           <button
             type="button"
