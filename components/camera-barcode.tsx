@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Barcode, RefreshCw, X } from 'lucide-react';
+import { Barcode, Flashlight, RefreshCw, X } from 'lucide-react';
 import { Button } from './ui/button';
 
 interface CameraBarcodeInterface {
@@ -36,6 +36,9 @@ export default function CameraBarcode({ onChange }: CameraBarcodeInterface) {
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [error, setError] = useState('');
   const [retryKey, setRetryKey] = useState(0);
+  const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
+  const [hasTorch, setHasTorch] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const onChangeRef = useRef(onChange);
@@ -69,7 +72,6 @@ export default function CameraBarcode({ onChange }: CameraBarcodeInterface) {
         if (value) {
           console.log('Hasil scan barcode:', value);
           onChangeRef.current(value);
-          setIsOpen(false);
           return;
         }
       } catch {
@@ -86,7 +88,7 @@ export default function CameraBarcode({ onChange }: CameraBarcodeInterface) {
 
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' } },
+          video: { facingMode: { ideal: facingMode } },
           audio: false,
         });
 
@@ -96,6 +98,10 @@ export default function CameraBarcode({ onChange }: CameraBarcodeInterface) {
         }
 
         streamRef.current = stream;
+        const track = stream.getVideoTracks()[0];
+        const capabilities = track?.getCapabilities() as MediaTrackCapabilities & { torch?: boolean };
+        setHasTorch(Boolean(capabilities?.torch));
+        setTorchOn(false);
         const video = videoRef.current;
         if (!video) return;
 
@@ -134,7 +140,25 @@ export default function CameraBarcode({ onChange }: CameraBarcodeInterface) {
       stopStream();
       setIsCameraReady(false);
     };
-  }, [isOpen, retryKey]);
+  }, [isOpen, retryKey, facingMode]);
+
+  const toggleTorch = useCallback(async () => {
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (!track || !hasTorch) return;
+    const nextTorchOn = !torchOn;
+    try {
+      await track.applyConstraints({ advanced: [{ torch: nextTorchOn } as MediaTrackConstraintSet] });
+      setTorchOn(nextTorchOn);
+      setError('');
+    } catch {
+      setError('Flash tidak dapat digunakan pada perangkat atau browser ini.');
+    }
+  }, [hasTorch, torchOn]);
+
+  const switchCamera = useCallback(() => {
+    setTorchOn(false);
+    setFacingMode((current) => (current === 'environment' ? 'user' : 'environment'));
+  }, []);
 
   const closeCamera = useCallback(() => {
     setIsOpen(false);
@@ -189,6 +213,28 @@ export default function CameraBarcode({ onChange }: CameraBarcodeInterface) {
                 )}
               </div>
             )}
+
+            <div className="absolute left-2 top-2 flex gap-2">
+              <button
+                type="button"
+                onClick={switchCamera}
+                aria-label="Ganti kamera"
+                className="rounded-full bg-black/60 p-1.5 text-white transition hover:bg-black/80"
+              >
+                <RefreshCw size={18} aria-hidden="true" />
+              </button>
+              {hasTorch && (
+                <button
+                  type="button"
+                  onClick={() => void toggleTorch()}
+                  aria-label={torchOn ? 'Matikan flash' : 'Nyalakan flash'}
+                  aria-pressed={torchOn}
+                  className={`rounded-full p-1.5 text-white transition ${torchOn ? 'bg-amber-500' : 'bg-black/60 hover:bg-black/80'}`}
+                >
+                  <Flashlight size={18} aria-hidden="true" />
+                </button>
+              )}
+            </div>
 
             <button
               type="button"

@@ -20,8 +20,8 @@ type Product = { id: string; name: string; code: string; barcode: string; price:
 type CartItem = { product: Product; quantity: number };
 
 const products: Product[] = [
-  { id: "P001", name: "Kecap manis Bango 135 ml", code: "P001", barcode: "8999999501012", price: 8500, stock: 24 },
-  { id: "P002", name: "Minyak goreng 1 L", code: "P002", barcode: "8999999501029", price: 18000, stock: 16 },
+  { id: "P001", name: "Kecap manis Bango 135 ml", code: "P001", barcode: "89991682110071", price: 8500, stock: 24 },
+  { id: "P002", name: "Minyak goreng 1 L", code: "P002", barcode: "8996129809131", price: 18000, stock: 16 },
   { id: "P003", name: "Mi instan goreng", code: "P003", barcode: "8999999501036", price: 3500, stock: 48 },
   { id: "P004", name: "Gula pasir 1 kg", code: "P004", barcode: "8999999501043", price: 16500, stock: 12 },
   { id: "P005", name: "Susu UHT 1 L", code: "P005", barcode: "8999999501050", price: 19000, stock: 10 },

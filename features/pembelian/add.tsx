@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import CameraBarcode from "@/components/camera-barcode";
 import { Product as CatalogProduct, initialProducts, productsStorageKey } from "@/features/produk/list";
 import {
   Barcode,
@@ -395,7 +396,8 @@ export default function AddFeature() {
               Cari dengan nama, kode, atau scan barcode. Gunakan ↑/↓ dan Enter untuk memilih.
             </p>
 
-            <div className="relative mt-3">
+            <div className="relative mt-3 flex gap-2">
+              <div className="relative min-w-0 flex-1">
               <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-gray-400" />
               <Input
                 ref={inputRef}
@@ -482,6 +484,18 @@ export default function AddFeature() {
                   )}
                 </div>
               )}
+              </div>
+              <CameraBarcode
+                onChange={(value) => {
+                  const product = products.find((item) => item.barcode === value || item.code.toLowerCase() === value.toLowerCase());
+                  if (product) addProduct(product);
+                  else {
+                    setQuery(value);
+                    setShowMatches(true);
+                    setNotice({ type: "error", text: "Barang dengan barcode tersebut belum terdaftar." });
+                  }
+                }}
+              />
             </div>
           </div>
 
