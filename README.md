@@ -22,6 +22,31 @@ Halaman beranda ada di `app/(main)/page.tsx` dan akan diperbarui otomatis saat A
 
 Proyek ini memakai [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) untuk mengoptimalkan dan memuat font Nunito secara otomatis.
 
+## Model data Convex
+
+Skema backend berada di `convex/schema.ts`. Data operasional selalu terkait ke satu
+`storeId` agar dapat dipisahkan antar bisnis. Satu akun bisnis mengelola satu toko;
+skema saat ini tidak memodelkan cabang.
+
+Skema mencakup pengguna dan keanggotaan/role, pengaturan toko, kategori, satuan,
+produk dan konversi satuan, saldo serta riwayat mutasi stok, pemasok, pelanggan,
+penjualan beserta pembayaran dan item, pembelian beserta pembayaran dan item,
+karyawan, shift dan absensi, kategori/pencatatan biaya, serta sesi kasir.
+Item transaksi menyimpan snapshot nama, satuan, dan harga supaya riwayat tetap
+akurat saat data katalog berubah.
+
+Kategori, satuan, produk, vendor, stok, pembelian, dan penjualan menggunakan
+query/mutation Convex dan dibatasi ke toko dengan keanggotaan aktif. Transaksi
+pembelian dan penjualan memperbarui saldo serta riwayat mutasi stok secara
+atomik. Data contoh dan penyimpanan `localStorage` untuk katalog/transaksi telah
+dihapus; nilai lama pada key aplikasi yang dikenal dibersihkan di browser saat
+provider Convex dimuat. Data yang telah tersimpan di Convex tidak dihapus.
+
+Perubahan katalog dan vendor hanya diizinkan untuk pemilik, admin, manajer,
+serta role inventaris. Saat katalog dibuka oleh akun yang belum memiliki toko,
+pengguna diminta membuat toko terlebih dahulu. Kategori dan satuan yang sudah
+dipakai sebaiknya dinonaktifkan, bukan dihapus, agar referensi produk tetap utuh.
+
 ## Struktur Folder
 
 ```text

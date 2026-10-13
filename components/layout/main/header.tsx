@@ -29,7 +29,7 @@ export default function Header() {
           </button>
           
           <div className="hidden md:flex items-center gap-4">
-            <Link href={'/auth'} className="bg-primary text-white px-5 py-2 rounded-full text-sm font-medium hover:bg-secondary transition-all shadow-md hover:shadow-lg">
+            <Link href={'/auth/login'} className="bg-primary text-white px-5 py-2 rounded-full text-sm font-medium hover:bg-secondary transition-all shadow-md hover:shadow-lg">
               Masuk / Daftar
             </Link>
           </div>

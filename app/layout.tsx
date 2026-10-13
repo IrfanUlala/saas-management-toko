@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Nunito } from "next/font/google";
 import "./globals.css";
 import PWAInstallButton from "@/components/layout/pwa-install-button";
+import { ConvexClientProvider } from "@/providers/convex-client.provider";
 
 const nunito = Nunito({
   variable: "--font-nunito",
@@ -163,7 +164,9 @@ export default function RootLayout({
       className={`${nunito.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-white text-gray-900 font-sans">
-        {children}
+        <ConvexClientProvider>
+          {children}
+        </ConvexClientProvider>
         <PWAInstallButton />
       </body>
     </html>

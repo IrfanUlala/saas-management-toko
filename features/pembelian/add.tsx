@@ -5,7 +5,11 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import CameraBarcode from "@/components/camera-barcode";
-import { Product as CatalogProduct, initialProducts, productsStorageKey } from "@/features/produk/list";
+import { useMutation, useQuery } from "convex/react";
+import { useConvexAuth } from "@convex-dev/auth/react";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
+import { CatalogStoreGate } from "@/features/produk/catalog-store-gate";
 import {
   Barcode,
   Check,
@@ -18,8 +22,19 @@ import {
   X,
 } from "lucide-react";
 
+type CatalogRecord = {
+  product: {
+    _id: Id<"products">;
+    name: string;
+    sku: string;
+    barcode?: string;
+    purchasePrice: number;
+  };
+  unit: { name: string; abbreviation: string };
+  stock: number;
+};
 type Product = {
-  id: string;
+  id: Id<"products">;
   name: string;
   code: string;
   barcode: string;
@@ -34,49 +49,68 @@ type CartItem = {
   unit: string;
   price: number; // harga per satuan terpilih
 };
-type Vendor = { id: string; name: string; contact: string; note: string };
-type Draft = { vendorId: string; cart: CartItem[]; paid: string; note: string };
 type Notice = { type: "success" | "error"; text: string };
-
-function productFromCatalog(product: CatalogProduct): Product {
-  const units = [{ name: product.unit, factor: 1 }, { name: `Pack (10 ${product.unit})`, factor: 10 }, { name: `Dus (24 ${product.unit})`, factor: 24 }];
-  return { id: product.id, name: product.name, code: product.code, barcode: product.barcode, purchasePrice: product.purchasePrice, stock: product.stock, units };
-}
-
-function readCatalog(): Product[] {
-  try {
-    const stored = localStorage.getItem(productsStorageKey);
-    const catalog = stored ? JSON.parse(stored) as CatalogProduct[] : initialProducts;
-    return catalog.map(productFromCatalog);
-  } catch { return initialProducts.map(productFromCatalog); }
-}
-
-const vendors: Vendor[] = [
-  { id: "V001", name: "Grosir Sumber Rejeki", contact: "0812-3456-7890", note: "Langganan · tempo 14 hari" },
-  { id: "V002", name: "CV Mitra Niaga", contact: "0813-2222-4567", note: "Harga grosir" },
-  { id: "V003", name: "Distributor Berkah Jaya", contact: "0821-8765-4321", note: "Pengiriman setiap hari" },
-];
 
 const currency = (n: number) =>
   new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(n);
 const numFmt = (n: number) =>
   new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 }).format(n);
 
-const draftKey = "toman-pembelian-draft";
 const makeLineId = (productId: string, unit: string) => `${productId}::${unit}`;
 
 export default function AddFeature() {
+  return (
+    <CatalogStoreGate>
+      <PurchaseForm />
+    </CatalogStoreGate>
+  );
+}
+
+function PurchaseForm() {
+  const { isAuthenticated } = useConvexAuth();
+  const productRecords = useQuery(
+    api.products.list,
+    isAuthenticated ? {} : "skip",
+  );
+  const vendorRecords = useQuery(
+    api.vendors.list,
+    isAuthenticated ? {} : "skip",
+  );
+  const createPurchase = useMutation(api.purchases.create);
+  const products = useMemo(
+    () =>
+      (productRecords ?? []).map((record: CatalogRecord) => ({
+        id: record.product._id,
+        name: record.product.name,
+        code: record.product.sku,
+        barcode: record.product.barcode ?? "",
+        purchasePrice: record.product.purchasePrice,
+        stock: record.stock,
+        units: [{ name: record.unit.abbreviation, factor: 1 }],
+      })),
+    [productRecords],
+  );
+  const vendors = useMemo(
+    () =>
+      (vendorRecords ?? []).map((vendor) => ({
+        id: vendor._id,
+        name: vendor.name,
+        contact: vendor.phone ?? "",
+        note: vendor.note ?? "",
+      })),
+    [vendorRecords],
+  );
   const [query, setQuery] = useState("");
   const [vendorId, setVendorId] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [paid, setPaid] = useState("");
+  const [invoiceNumber, setInvoiceNumber] = useState("");
   const [note, setNote] = useState("");
   const [showMatches, setShowMatches] = useState(false);
   const [showVendors, setShowVendors] = useState(false);
   const [highlighted, setHighlighted] = useState(0);
   const [notice, setNotice] = useState<Notice | null>(null);
-  const [products, setProducts] = useState<Product[]>(initialProducts.map(productFromCatalog));
-  const [hydrated, setHydrated] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const vendorRef = useRef<HTMLDivElement>(null);
@@ -102,70 +136,6 @@ export default function AddFeature() {
     (i) => !Number.isFinite(i.quantity) || i.quantity <= 0 || !Number.isFinite(i.price) || i.price < 0
   );
   const canSave = Boolean(selectedVendor) && cart.length > 0 && !hasInvalidLine;
-
-  useEffect(() => {
-    function refreshCatalog() { setProducts(readCatalog()); }
-    window.addEventListener("storage", refreshCatalog);
-    window.addEventListener("toman-products-updated", refreshCatalog);
-    const timer = window.setTimeout(refreshCatalog, 0);
-    return () => { window.clearTimeout(timer); window.removeEventListener("storage", refreshCatalog); window.removeEventListener("toman-products-updated", refreshCatalog); };
-  }, []);
-
-  // Muat draft
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      try {
-        const raw = sessionStorage.getItem(draftKey);
-        if (raw) {
-          const draft = JSON.parse(raw) as Draft;
-          if (vendors.some((v) => v.id === draft.vendorId)) setVendorId(draft.vendorId);
-          if (Array.isArray(draft.cart)) {
-            const restored = draft.cart
-              .map((item): CartItem | null => {
-                const product = products.find((p) => p.id === item.product?.id);
-                if (!product) return null;
-                const unitName = product.units.some((u) => u.name === item.unit)
-                  ? item.unit
-                  : product.units[0].name;
-                const unit = product.units.find((u) => u.name === unitName)!;
-                const q = Number(item.quantity);
-                const p = Number(item.price);
-                return {
-                  lineId: makeLineId(product.id, unitName),
-                  product,
-                  quantity: Number.isFinite(q) && q > 0 ? q : 1,
-                  unit: unitName,
-                  price: Number.isFinite(p) && p >= 0 ? p : product.purchasePrice * unit.factor,
-                };
-              })
-              .filter((x): x is CartItem => x !== null);
-
-            // Gabung bila ada lineId yang sama
-            const map = new Map<string, CartItem>();
-            for (const line of restored) {
-              const existing = map.get(line.lineId);
-              if (existing) map.set(line.lineId, { ...existing, quantity: existing.quantity + line.quantity });
-              else map.set(line.lineId, line);
-            }
-            setCart(Array.from(map.values()));
-          }
-          if (typeof draft.paid === "string") setPaid(draft.paid);
-          if (typeof draft.note === "string") setNote(draft.note);
-        }
-      } catch {
-        sessionStorage.removeItem(draftKey);
-      }
-      setHydrated(true);
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [products]);
-
-  // Simpan draft
-  useEffect(() => {
-    if (hydrated) {
-      sessionStorage.setItem(draftKey, JSON.stringify({ vendorId, cart, paid, note } satisfies Draft));
-    }
-  }, [vendorId, cart, paid, note, hydrated]);
 
   // Klik di luar vendor dropdown
   useEffect(() => {
@@ -273,7 +243,7 @@ export default function AddFeature() {
     }
   }
 
-  function finishPurchase() {
+  async function finishPurchase() {
     if (!selectedVendor) {
       setNotice({ type: "error", text: "Pilih vendor sebelum menyelesaikan pembelian." });
       return;
@@ -286,17 +256,57 @@ export default function AddFeature() {
       setNotice({ type: "error", text: "Periksa jumlah dan harga barang terlebih dahulu." });
       return;
     }
-    const summary =
-      balance >= 0
-        ? `${currency(subtotal)}${balance > 0 ? ` · Kembalian ${currency(balance)}` : ""}`
-        : `${currency(subtotal)} · Sisa utang ${currency(-balance)}`;
-    setNotice({ type: "success", text: `Pembelian dari ${selectedVendor.name} dicatat · ${summary}` });
-    setCart([]);
-    setPaid("");
-    setNote("");
-    setQuery("");
-    sessionStorage.removeItem(draftKey);
-    inputRef.current?.focus();
+    setIsSubmitting(true);
+    try {
+      await createPurchase({
+        vendorId: selectedVendor.id,
+        invoiceNumber: invoiceNumber.trim() || undefined,
+        amountPaid: payment,
+        method: "cash",
+        note: note.trim() || undefined,
+        lines: cart.map(({ product, quantity, price, unit }) => {
+          const factor =
+            product.units.find((option) => option.name === unit)?.factor ?? 1;
+          return {
+            productId: product.id,
+            quantity: quantity * factor,
+            unitCost: price / factor,
+          };
+        }),
+      });
+      const summary =
+        balance >= 0
+          ? `${currency(subtotal)}${balance > 0 ? ` · Kelebihan bayar ${currency(balance)}` : ""}`
+          : `${currency(subtotal)} · Sisa utang ${currency(-balance)}`;
+      setNotice({
+        type: "success",
+        text: `Pembelian dari ${selectedVendor.name} dicatat · ${summary}`,
+      });
+      setCart([]);
+      setPaid("");
+      setInvoiceNumber("");
+      setNote("");
+      setQuery("");
+      inputRef.current?.focus();
+    } catch (caught) {
+      setNotice({
+        type: "error",
+        text:
+          caught instanceof Error
+            ? caught.message
+            : "Pembelian gagal disimpan.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  if (productRecords === undefined || vendorRecords === undefined) {
+    return (
+      <div className="mx-auto max-w-6xl px-4 py-12 text-sm text-gray-500">
+        Memuat produk dan vendor...
+      </div>
+    );
   }
 
   return (
@@ -336,10 +346,17 @@ export default function AddFeature() {
             ref={vendorRef}
             className="relative rounded-xl border border-gray-200 bg-white p-4 shadow-sm md:p-5"
           >
-            <label className="text-sm font-semibold" htmlFor="vendor">
-              Rekanan / vendor
-            </label>
-            <p className="mt-1 text-xs text-gray-500">Pilih pemasok barang untuk transaksi ini.</p>
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <label className="text-sm font-semibold" htmlFor="vendor">
+                  Rekanan / vendor
+                </label>
+                <p className="mt-1 text-xs text-gray-500">Pilih pemasok barang untuk transaksi ini.</p>
+              </div>
+              <Link href="/admin/pembelian/vendor">
+                <Button type="button" variant="outline" size="sm">Kelola vendor</Button>
+              </Link>
+            </div>
             <button
               id="vendor"
               type="button"
@@ -467,18 +484,12 @@ export default function AddFeature() {
                       <p className="text-sm text-gray-600">Barang belum terdaftar.</p>
                       <Link
                         href="/admin/produk"
-                        onClick={() =>
-                          sessionStorage.setItem(
-                            draftKey,
-                            JSON.stringify({ vendorId, cart, paid, note } satisfies Draft)
-                          )
-                        }
                         className="mt-2 inline-block text-sm font-medium text-blue-600 underline underline-offset-2"
                       >
                         + Tambahkan barang di Produk
                       </Link>
                       <p className="mt-1 text-xs text-gray-500">
-                        Draft pembelian tersimpan; kembali ke halaman ini untuk melanjutkan.
+                        Setelah produk disimpan, kembali ke halaman ini untuk melanjutkan.
                       </p>
                     </div>
                   )}
@@ -748,6 +759,18 @@ export default function AddFeature() {
           )}
 
           <div>
+            <label htmlFor="purchase-invoice" className="block text-sm font-medium">
+              Nomor faktur (opsional)
+            </label>
+            <Input
+              id="purchase-invoice"
+              value={invoiceNumber}
+              onChange={(event) => setInvoiceNumber(event.target.value)}
+              maxLength={80}
+              placeholder="Nomor faktur dari vendor"
+            />
+          </div>
+          <div>
             <label htmlFor="purchase-note" className="block text-sm font-medium">
               Catatan (opsional)
             </label>
@@ -756,7 +779,7 @@ export default function AddFeature() {
               value={note}
               onChange={(e) => setNote(e.target.value)}
               rows={3}
-              placeholder="Nomor faktur atau catatan lainnya"
+              placeholder="Catatan pembelian"
               className="mt-1 w-full resize-y rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-100"
             />
           </div>
@@ -764,8 +787,9 @@ export default function AddFeature() {
           <Button
             type="button"
             className="h-11 w-full"
-            disabled={!canSave}
-            onClick={finishPurchase}
+            disabled={!canSave || isSubmitting}
+            isLoading={isSubmitting}
+            onClick={() => void finishPurchase()}
           >
             <Check size={16} className="mr-1" /> Simpan pembelian
           </Button>

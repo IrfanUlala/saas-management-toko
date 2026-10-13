@@ -1,9 +1,13 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import Link from "next/link";
+import { useQuery } from "convex/react";
+import { useConvexAuth } from "@convex-dev/auth/react";
+import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CatalogStoreGate } from "@/features/produk/catalog-store-gate";
 import {
   ArrowUpDown,
   CalendarDays,
@@ -39,14 +43,6 @@ type Purchase = {
 type Status = "Lunas" | "Sebagian" | "Belum lunas";
 type SortKey = "newest" | "oldest" | "largest" | "smallest" | "outstanding";
 type RangeKey = "all" | "today" | "7d" | "30d" | "month";
-
-const purchases: Purchase[] = [
-  { id: "PB-2026-0048", date: "2026-10-08T09:42:00", vendor: "Grosir Sumber Rejeki", invoice: "SR/INV/1008/048", paid: 250000, note: "Pengiriman pagi · sisa dibayar pekan depan", lines: [{ product: "Kecap manis 135 ml", code: "P001", quantity: 2, unit: "Dus", factor: 24, price: 168000 }, { product: "Mi instan goreng", code: "P003", quantity: 4, unit: "Pack", factor: 10, price: 28000 }, { product: "Minyak goreng 1 L", code: "P002", quantity: 3, unit: "Pcs", factor: 1, price: 15500 }] },
-  { id: "PB-2026-0047", date: "2026-10-07T14:16:00", vendor: "CV Mitra Niaga", invoice: "MN-INV-77102", paid: 792000, note: "Barang diterima lengkap", lines: [{ product: "Beras 5 kg", code: "P006", quantity: 8, unit: "Pcs", factor: 1, price: 65000 }, { product: "Gula pasir 1 kg", code: "P004", quantity: 4, unit: "Karung", factor: 25, price: 68000 }] },
-  { id: "PB-2026-0046", date: "2026-10-06T10:05:00", vendor: "Distributor Berkah Jaya", invoice: "DBJ/1006/226", paid: 0, note: "Tempo 14 hari", lines: [{ product: "Susu UHT 1 L", code: "P005", quantity: 5, unit: "Dus", factor: 12, price: 198000 }, { product: "Minyak goreng 1 L", code: "P002", quantity: 2, unit: "Dus", factor: 12, price: 186000 }] },
-  { id: "PB-2026-0045", date: "2026-10-04T08:30:00", vendor: "Grosir Sumber Rejeki", invoice: "SR/INV/1004/045", paid: 235000, note: "", lines: [{ product: "Kecap manis 135 ml", code: "P001", quantity: 10, unit: "Pcs", factor: 1, price: 7000 }, { product: "Mi instan goreng", code: "P003", quantity: 50, unit: "Pcs", factor: 1, price: 2800 }, { product: "Gula pasir 1 kg", code: "P004", quantity: 5, unit: "Pcs", factor: 1, price: 14500 }] },
-  { id: "PB-2026-0044", date: "2026-10-02T16:52:00", vendor: "CV Mitra Niaga", invoice: "MN-INV-77031", paid: 390000, note: "", lines: [{ product: "Susu UHT 1 L", code: "P005", quantity: 12, unit: "Pcs", factor: 1, price: 16500 }, { product: "Beras 5 kg", code: "P006", quantity: 3, unit: "Pcs", factor: 1, price: 65000 }] },
-];
 
 const currency = (value: number) =>
   new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(value);
@@ -109,13 +105,46 @@ function inRange(dateStr: string, range: RangeKey, now = new Date()): boolean {
 }
 
 export default function ListFeature() {
+  return (
+    <CatalogStoreGate>
+      <PurchaseHistory />
+    </CatalogStoreGate>
+  );
+}
+
+function PurchaseHistory() {
+  const { isAuthenticated } = useConvexAuth();
+  const records = useQuery(
+    api.purchases.list,
+    isAuthenticated ? {} : "skip",
+  );
+  const purchases = useMemo(
+    () =>
+      (records ?? []).map(({ purchase, items }) => ({
+        id: purchase.purchaseNumber,
+        date: new Date(purchase.purchasedAt).toISOString(),
+        vendor: purchase.vendorName,
+        invoice: purchase.invoiceNumber ?? "—",
+        paid: purchase.amountPaid,
+        note: purchase.note ?? "",
+        lines: items.map((item) => ({
+          product: item.productName,
+          code: item.sku ?? "",
+          quantity: item.baseQuantity,
+          unit: item.unitName,
+          factor: 1,
+          price: item.unitCost,
+        })),
+      })),
+    [records],
+  );
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
 
   const [status, setStatus] = useState<"all" | Status>("all");
   const [range, setRange] = useState<RangeKey>("all");
   const [sort, setSort] = useState<SortKey>("newest");
-  const [expanded, setExpanded] = useState<string | null>(purchases[0]?.id ?? null);
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   const filtersActive =
     query.trim() !== "" || status !== "all" || range !== "all" || sort !== "newest";
@@ -168,14 +197,7 @@ export default function ListFeature() {
     });
 
     return result;
-  }, [deferredQuery, status, range, sort]);
-
-  // Auto-collapse bila transaksi yang terbuka tersaring keluar
-  useEffect(() => {
-    if (expanded && !filtered.some((p) => p.id === expanded)) {
-      setExpanded(null);
-    }
-  }, [filtered, expanded]);
+  }, [deferredQuery, status, range, sort, purchases]);
 
   // Statistik mengikuti hasil filter (bukan seluruh data)
   const stats = useMemo(() => {
@@ -196,6 +218,14 @@ export default function ListFeature() {
   }, [filtered]);
 
   const isStale = query !== deferredQuery;
+
+  if (records === undefined) {
+    return (
+      <div className="mx-auto max-w-6xl px-4 py-12 text-sm text-gray-500">
+        Memuat riwayat pembelian...
+      </div>
+    );
+  }
 
   return (
     <section className="mx-auto max-w-6xl space-y-6 px-4 py-6 md:px-6">

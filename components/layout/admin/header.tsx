@@ -1,14 +1,17 @@
 "use client";
 
-import {
-  Bell,
-  ChevronDown,
-  MapPin,
-  MessageCircleQuestion,
-  User,
-} from "lucide-react";
+import { Bell, MapPin, MessageCircleQuestion } from "lucide-react";
+import { useQuery } from "convex/react";
+import { useConvexAuth } from "@convex-dev/auth/react";
+import { api } from "@/convex/_generated/api";
 
 export default function AdminHeader() {
+  const { isAuthenticated } = useConvexAuth();
+  const store = useQuery(
+    api.catalog.currentStore,
+    isAuthenticated ? {} : "skip",
+  );
+
   return (
     <header className="z-40 w-full border-b border-gray-200 bg-white/90 backdrop-blur-md">
       <div className="flex h-16 items-center justify-between px-4 md:px-6">
@@ -23,22 +26,18 @@ export default function AdminHeader() {
           <div className="min-w-0">
             <div className="flex items-center gap-1.5">
               <h1 className="truncate text-sm font-semibold text-gray-900 md:text-base">
-                Toko Maju Jaya
+                {store === undefined
+                  ? "Memuat toko..."
+                  : store?.name ?? "Toko belum dibuat"}
               </h1>
-
-              <button
-                type="button"
-                className="rounded-md p-0.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
-                aria-label="Pilih toko"
-              >
-                <ChevronDown className="h-4 w-4" />
-              </button>
             </div>
 
-            <div className="mt-0.5 flex items-center gap-1 text-xs text-gray-500">
-              <MapPin className="h-3.5 w-3.5" />
-              <span className="truncate">Cabang Jakarta Pusat</span>
-            </div>
+            {store?.address && (
+              <div className="mt-0.5 flex items-center gap-1 text-xs text-gray-500">
+                <MapPin className="h-3.5 w-3.5" />
+                <span className="truncate">{store.address}</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -59,12 +58,6 @@ export default function AdminHeader() {
             aria-label="Notifikasi"
           >
             <Bell className="h-5 w-5" />
-
-            {/* Notification Badge */}
-            <span className="absolute right-2 top-2 flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
-            </span>
           </button>
         </div>
       </div>

@@ -4,6 +4,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import CameraBarcode from "@/components/camera-barcode";
+import { useMutation, useQuery } from "convex/react";
+import { useConvexAuth } from "@convex-dev/auth/react";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
+import { CatalogStoreGate } from "@/features/produk/catalog-store-gate";
 import {
   Barcode,
   Check,
@@ -16,30 +21,48 @@ import {
   X,
 } from "lucide-react";
 
-type Product = { id: string; name: string; code: string; barcode: string; price: number; stock: number };
+type Product = { id: Id<"products">; name: string; code: string; barcode: string; price: number; stock: number };
 type CartItem = { product: Product; quantity: number };
-
-const products: Product[] = [
-  { id: "P001", name: "Kecap manis Bango 135 ml", code: "P001", barcode: "8999168211071", price: 8500, stock: 24 },
-  { id: "P002", name: "Minyak goreng 1 L", code: "P002", barcode: "8996129809131", price: 18000, stock: 16 },
-  { id: "P003", name: "Mi instan goreng", code: "P003", barcode: "8999999501036", price: 3500, stock: 48 },
-  { id: "P004", name: "Gula pasir 1 kg", code: "P004", barcode: "8999999501043", price: 16500, stock: 12 },
-  { id: "P005", name: "Susu UHT 1 L", code: "P005", barcode: "8999999501050", price: 19000, stock: 10 },
-  { id: "P006", name: "Beras 5 kg", code: "P006", barcode: "8999999501067", price: 72000, stock: 8 },
-];
 
 const currency = (amount: number) =>
   new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(amount);
 
 export default function AddFeature() {
+  return (
+    <CatalogStoreGate>
+      <PointOfSale />
+    </CatalogStoreGate>
+  );
+}
+
+function PointOfSale() {
+  const { isAuthenticated } = useConvexAuth();
+  const productRecords = useQuery(
+    api.products.list,
+    isAuthenticated ? {} : "skip",
+  );
+  const checkoutSale = useMutation(api.sales.checkout);
+  const products = useMemo(
+    () =>
+      (productRecords ?? []).map(({ product, stock }) => ({
+        id: product._id,
+        name: product.name,
+        code: product.sku,
+        barcode: product.barcode ?? "",
+        price: product.salePrice,
+        stock,
+      })),
+    [productRecords],
+  );
   const [query, setQuery] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [recent, setRecent] = useState(["P001", "P003", "P002"]);
+  const [recent, setRecent] = useState<Id<"products">[]>([]);
   const [showRecent, setShowRecent] = useState(true);
   const [showMatches, setShowMatches] = useState(false);
   const [highlighted, setHighlighted] = useState(0);
   const [paid, setPaid] = useState("");
   const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const recentRef = useRef<HTMLDivElement>(null);
@@ -51,7 +74,7 @@ export default function AddFeature() {
     return products.filter((p) =>
       `${p.name} ${p.code} ${p.barcode}`.toLowerCase().includes(term)
     );
-  }, [query]);
+  }, [query, products]);
 
   const totalItems = cart.reduce((n, i) => n + i.quantity, 0);
   const subtotal = cart.reduce((sum, i) => sum + i.product.price * i.quantity, 0);
@@ -66,9 +89,6 @@ export default function AddFeature() {
     const set = new Set<number>([subtotal, roundUp(1000), roundUp(5000), roundUp(10000), roundUp(50000)]);
     return Array.from(set).sort((a, b) => a - b).slice(0, 4);
   }, [subtotal]);
-
-  // Reset highlight setiap daftar berubah
-  useEffect(() => setHighlighted(0), [query]);
 
   // Tutup panel "sering dicari" bila klik di luar
   useEffect(() => {
@@ -172,21 +192,47 @@ export default function AddFeature() {
     }
   }
 
-  function checkout() {
+  async function checkout() {
     const changeValue = payment - subtotal;
-    setNotice({
-      type: "success",
-      text: `Penjualan berhasil · ${currency(subtotal)}${changeValue > 0 ? ` · Kembalian ${currency(changeValue)}` : ""
-        }`,
-    });
-    setCart([]);
-    setPaid("");
-    setQuery("");
-    inputRef.current?.focus();
+    setIsSubmitting(true);
+    try {
+      await checkoutSale({
+        lines: cart.map(({ product, quantity }) => ({
+          productId: product.id,
+          quantity,
+        })),
+        amountTendered: payment,
+        method: "cash",
+      });
+      setNotice({
+        type: "success",
+        text: `Penjualan berhasil · ${currency(subtotal)}${changeValue > 0 ? ` · Kembalian ${currency(changeValue)}` : ""}`,
+      });
+      setCart([]);
+      setPaid("");
+      setQuery("");
+      inputRef.current?.focus();
+    } catch (caught) {
+      setNotice({
+        type: "error",
+        text:
+          caught instanceof Error ? caught.message : "Penjualan gagal disimpan.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   function setQuickPaid(amount: number) {
     setPaid(String(amount));
+  }
+
+  if (productRecords === undefined) {
+    return (
+      <div className="mx-auto max-w-6xl px-4 py-12 text-sm text-gray-500">
+        Memuat produk...
+      </div>
+    );
   }
 
   return (
@@ -516,7 +562,7 @@ export default function AddFeature() {
             </span>
           </div>
 
-          <Button type="button" className="h-11 w-full" disabled={!canPay} onClick={checkout}>
+          <Button type="button" className="h-11 w-full" disabled={!canPay || isSubmitting} isLoading={isSubmitting} onClick={() => void checkout()}>
             <Check size={16} className="mr-1" /> Selesaikan penjualan
           </Button>
           <p className="text-center text-xs text-gray-500">
