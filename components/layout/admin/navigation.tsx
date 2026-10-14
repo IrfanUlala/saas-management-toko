@@ -4,7 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   History,
+  ChartNoAxesCombined,
   Package,
+  Users,
   Settings,
   ShoppingCart,
   Truck,
@@ -21,6 +23,11 @@ const sideItems = [
     href: "/admin/pembelian",
     icon: Truck,
   },
+  {
+    title: "Pelanggan",
+    href: "/admin/pelanggan",
+    icon: Users,
+  },
 ] as const;
 
 const rightItems = [
@@ -29,6 +36,11 @@ const rightItems = [
     href: "/admin/riwayat",
     icon: History,
   },
+  {
+    title: "Laporan",
+    href: "/admin/laporan",
+    icon: ChartNoAxesCombined,
+  }, 
   {
     title: "Pengaturan",
     href: "/admin/pengaturan",
@@ -96,9 +108,9 @@ export default function Navigation() {
 
   return (
     <nav className="sticky inset-x-0 bottom-0 z-50 mt-3">
-      <div className="mx-auto max-w-lg px-3 pb-3">
+      <div className="mx-auto w-full max-w-2xl px-3 pb-3">
         <div className="relative h-17 rounded-2xl border border-gray-200/80 bg-white/95 shadow-[0_-4px_25px_rgba(0,0,0,0.08)] backdrop-blur-xl">
-          <div className="grid h-full grid-cols-5 items-center px-1">
+          <div className="grid h-full grid-cols-7 items-center px-1">
             {sideItems.map(renderItem)}
 
             {/* Center / Penjualan */}

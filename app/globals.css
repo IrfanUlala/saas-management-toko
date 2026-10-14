@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+@media print {
+  body * { visibility: hidden; }
+  #sale-receipt, #sale-receipt * { visibility: visible; }
+  #sale-receipt { position: absolute; inset: 0; width: 100%; padding: 1rem; }
+}
+
 @theme {
   --color-primary: #008000;
   --color-secondary: #006400;

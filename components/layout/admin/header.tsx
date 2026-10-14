@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, MapPin, MessageCircleQuestion } from "lucide-react";
+import { MapPin, MessageCircleQuestion } from "lucide-react";
 import { useQuery } from "convex/react";
 import { useConvexAuth } from "@convex-dev/auth/react";
 import { api } from "@/convex/_generated/api";
@@ -43,22 +43,16 @@ export default function AdminHeader() {
 
         {/* Right: Notification & Account */}
         <div className="flex items-center gap-2 md:gap-4">
-          <button
-            type="button"
-            className="relative flex h-10 w-10 items-center justify-center rounded-xl text-gray-500 transition hover:bg-gray-100 hover:text-gray-900"
-            aria-label="Bantuan"
-            title="Bantuan"
+          <a
+            href="https://wa.me/62895374118869"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex h-10 w-10 items-center justify-center rounded-xl text-gray-500 transition hover:bg-gray-100 hover:text-gray-900"
+            aria-label="Hubungi bantuan melalui WhatsApp"
+            title="Bantuan via WhatsApp"
           >
             <MessageCircleQuestion className="h-5 w-5" />
-          </button>
-          {/* Notification */}
-          <button
-            type="button"
-            className="relative flex h-10 w-10 items-center justify-center rounded-xl text-gray-500 transition hover:bg-gray-100 hover:text-gray-900"
-            aria-label="Notifikasi"
-          >
-            <Bell className="h-5 w-5" />
-          </button>
+          </a>
         </div>
       </div>
     </header>

@@ -19,6 +19,7 @@ export const list = query({
     v.object({
       purchase: schema.doc("purchases"),
       items: v.array(schema.doc("purchaseItems")),
+      payments: v.array(schema.doc("purchasePayments")),
     }),
   ),
   handler: async (ctx) => {
@@ -31,13 +32,20 @@ export const list = query({
       .order("desc")
       .take(200);
     return await Promise.all(
-      purchases.map(async (purchase) => ({
-        purchase,
-        items: await ctx.db
-          .query("purchaseItems")
-          .withIndex("by_purchase", (q) => q.eq("purchaseId", purchase._id))
-          .take(200),
-      })),
+      purchases.map(async (purchase) => {
+        const [items, payments] = await Promise.all([
+          ctx.db
+            .query("purchaseItems")
+            .withIndex("by_purchase", (q) => q.eq("purchaseId", purchase._id))
+            .take(200),
+          ctx.db
+            .query("purchasePayments")
+            .withIndex("by_purchase", (q) => q.eq("purchaseId", purchase._id))
+            .order("desc")
+            .take(200),
+        ]);
+        return { purchase, items, payments };
+      }),
     );
   },
 });

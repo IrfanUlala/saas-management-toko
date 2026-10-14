@@ -1,16 +1,18 @@
 "use client";
 
-import { useDeferredValue, useMemo, useState } from "react";
+import { FormEvent, useDeferredValue, useMemo, useState } from "react";
 import Link from "next/link";
-import { useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { useConvexAuth } from "@convex-dev/auth/react";
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CatalogStoreGate } from "@/features/produk/catalog-store-gate";
 import {
   ArrowUpDown,
   CalendarDays,
+  CreditCard,
   ChevronDown,
   ChevronUp,
   Eye,
@@ -31,12 +33,14 @@ type PurchaseLine = {
 };
 
 type Purchase = {
+  purchaseId: Id<"purchases">;
   id: string;
   date: string;
   vendor: string;
   invoice: string;
   paid: number;
   note: string;
+  payments: { amount: number; method: string; paidAt: number; reference?: string }[];
   lines: PurchaseLine[];
 };
 
@@ -48,6 +52,7 @@ const currency = (value: number) =>
   new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(value);
 const numFmt = (value: number) => new Intl.NumberFormat("id-ID").format(value);
 const dateFormat = new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short" });
+const paymentMethodLabel = (method: string) => ({ cash: "Tunai", bankTransfer: "Transfer bank", debitCard: "Kartu debit", creditCard: "Kartu kredit", qris: "QRIS", eWallet: "Dompet digital", other: "Lainnya" }[method] ?? method);
 
 /** Total nilai transaksi. */
 const purchaseTotal = (p: Purchase) => p.lines.reduce((s, l) => s + l.quantity * l.price, 0);
@@ -118,15 +123,18 @@ function PurchaseHistory() {
     api.purchases.list,
     isAuthenticated ? {} : "skip",
   );
+  const recordPayment = useMutation(api.debtPayments.record);
   const purchases = useMemo(
     () =>
-      (records ?? []).map(({ purchase, items }) => ({
+      (records ?? []).map(({ purchase, items, payments }) => ({
+        purchaseId: purchase._id,
         id: purchase.purchaseNumber,
         date: new Date(purchase.purchasedAt).toISOString(),
         vendor: purchase.vendorName,
         invoice: purchase.invoiceNumber ?? "—",
         paid: purchase.amountPaid,
         note: purchase.note ?? "",
+        payments: payments.map((payment) => ({ amount: payment.amount, method: payment.method, paidAt: payment.paidAt, reference: payment.reference })),
         lines: items.map((item) => ({
           product: item.productName,
           code: item.sku ?? "",
@@ -145,6 +153,11 @@ function PurchaseHistory() {
   const [range, setRange] = useState<RangeKey>("all");
   const [sort, setSort] = useState<SortKey>("newest");
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [paymentTarget, setPaymentTarget] = useState<Purchase | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [paymentError, setPaymentError] = useState("");
+  const [savingPayment, setSavingPayment] = useState(false);
 
   const filtersActive =
     query.trim() !== "" || status !== "all" || range !== "all" || sort !== "newest";
@@ -154,6 +167,35 @@ function PurchaseHistory() {
     setStatus("all");
     setRange("all");
     setSort("newest");
+  }
+
+  async function submitPayment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!paymentTarget) return;
+    const total = purchaseTotal(paymentTarget);
+    const remaining = total - paymentTarget.paid;
+    const amount = Number(paymentAmount);
+    if (!Number.isFinite(amount) || amount <= 0 || amount > remaining) {
+      setPaymentError("Nominal pembayaran harus lebih dari nol dan tidak boleh melebihi sisa hutang.");
+      return;
+    }
+    setSavingPayment(true);
+    setPaymentError("");
+    try {
+      await recordPayment({
+        kind: "payable",
+        recordId: paymentTarget.purchaseId,
+        amount,
+        method: paymentMethod as "cash" | "bankTransfer" | "debitCard" | "creditCard" | "qris" | "eWallet" | "other",
+        reference: paymentTarget.id,
+      });
+      setPaymentTarget(null);
+      setPaymentAmount("");
+    } catch (error) {
+      setPaymentError(error instanceof Error ? error.message : "Pembayaran gagal disimpan.");
+    } finally {
+      setSavingPayment(false);
+    }
   }
 
   // Filter + sort
@@ -418,9 +460,12 @@ function PurchaseHistory() {
                           <p className="text-sm font-semibold">Detail pembelian</p>
                           <p className="mt-1 text-xs text-gray-500">No. faktur {purchase.invoice}</p>
                         </div>
-                        <span className="text-sm text-gray-600">
-                          {dateFormat.format(new Date(purchase.date))}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-600">
+                            {dateFormat.format(new Date(purchase.date))}
+                          </span>
+                          {outstanding > 0 && <Button type="button" size="sm" onClick={() => { setPaymentTarget(purchase); setPaymentAmount(String(outstanding)); setPaymentError(""); }}><CreditCard size={14} className="mr-1.5"/>Bayar</Button>}
+                        </div>
                       </div>
 
                       <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
@@ -492,6 +537,10 @@ function PurchaseHistory() {
                         </div>
                       </div>
 
+                      <div className="ml-auto mt-4 max-w-sm rounded-lg border border-gray-200 bg-white p-3">
+                        <h3 className="text-sm font-semibold">Riwayat pembayaran</h3>
+                        {purchase.payments.length ? <ul className="mt-2 divide-y divide-gray-100">{purchase.payments.map((payment, index) => <li key={`${payment.paidAt}-${index}`} className="flex justify-between gap-3 py-2 text-xs"><span className="text-gray-600">{dateFormat.format(new Date(payment.paidAt))}<span className="block text-gray-400">{paymentMethodLabel(payment.method)}{payment.reference ? ` · ${payment.reference}` : ""}</span></span><span className="shrink-0 font-medium tabular-nums">{currency(payment.amount)}</span></li>)}</ul> : <p className="mt-2 text-xs text-gray-500">Belum ada pembayaran tercatat.</p>}
+                      </div>
                       {purchase.note && (
                         <p className="mt-3 text-xs text-gray-500">Catatan: {purchase.note}</p>
                       )}
@@ -503,6 +552,7 @@ function PurchaseHistory() {
           </div>
         )}
       </div>
+      {paymentTarget && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"><form onSubmit={submitPayment} className="w-full max-w-md space-y-4 rounded-xl bg-white p-5 shadow-xl"><div><h2 className="text-lg font-semibold">Bayar hutang pembelian</h2><p className="mt-1 text-sm text-gray-500">{paymentTarget.id} · Sisa {currency(purchaseTotal(paymentTarget) - paymentTarget.paid)}</p></div><label className="block space-y-1 text-sm">Nominal pembayaran<Input type="number" min="1" max={purchaseTotal(paymentTarget) - paymentTarget.paid} step="1" required value={paymentAmount} onChange={(event) => setPaymentAmount(event.target.value)} /></label><label className="block space-y-1 text-sm">Metode pembayaran<select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)} className="h-10 w-full rounded-md border border-gray-200 bg-white px-3"><option value="cash">Tunai</option><option value="bankTransfer">Transfer bank</option><option value="debitCard">Kartu debit</option><option value="creditCard">Kartu kredit</option><option value="qris">QRIS</option><option value="eWallet">Dompet digital</option><option value="other">Lainnya</option></select></label>{paymentError && <p role="alert" className="text-sm text-red-600">{paymentError}</p>}<div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={savingPayment} onClick={() => setPaymentTarget(null)}>Batal</Button><Button type="submit" disabled={savingPayment}>{savingPayment ? "Menyimpan…" : "Simpan pembayaran"}</Button></div></form></div>}
     </section>
   );
 }

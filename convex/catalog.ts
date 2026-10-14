@@ -118,6 +118,40 @@ export const createStore = mutation({
   },
 });
 
+export const updateStore = mutation({
+  args: {
+    name: v.string(),
+    businessType: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    email: v.optional(v.string()),
+    address: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const store = await requireCatalogManager(ctx);
+    const name = args.name.trim();
+    const businessType = args.businessType?.trim();
+    const phone = args.phone?.trim();
+    const email = args.email?.trim();
+    const address = args.address?.trim();
+    if (name.length < 2 || name.length > 80) {
+      throw new ConvexError("Nama toko harus terdiri dari 2–80 karakter.");
+    }
+    if ((businessType?.length ?? 0) > 80 || (phone?.length ?? 0) > 40 || (email?.length ?? 0) > 120 || (address?.length ?? 0) > 500) {
+      throw new ConvexError("Periksa panjang informasi toko.");
+    }
+    await ctx.db.patch(store._id, {
+      name,
+      businessType: businessType || undefined,
+      phone: phone || undefined,
+      email: email || undefined,
+      address: address || undefined,
+      updatedAt: Date.now(),
+    });
+    return null;
+  },
+});
+
 export const listCategories = query({
   args: {},
   returns: v.array(schema.doc("categories")),

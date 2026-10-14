@@ -42,6 +42,12 @@ function PointOfSale() {
     isAuthenticated ? {} : "skip",
   );
   const checkoutSale = useMutation(api.sales.checkout);
+  const customerRecords = useQuery(api.customers.list, isAuthenticated ? {} : "skip");
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [selectedCustomerId, setSelectedCustomerId] = useState<Id<"customers"> | null>(null);
+  const [showCustomerMatches, setShowCustomerMatches] = useState(false);
+  const customers = customerRecords ?? [];
+  const customerMatches = customers.filter((customer) => `${customer.name} ${customer.phone ?? ""} ${customer.email ?? ""}`.toLowerCase().includes(customerSearch.trim().toLowerCase()));
   const products = useMemo(
     () =>
       (productRecords ?? []).map(({ product, stock }) => ({
@@ -61,6 +67,12 @@ function PointOfSale() {
   const [showMatches, setShowMatches] = useState(false);
   const [highlighted, setHighlighted] = useState(0);
   const [paid, setPaid] = useState("");
+  const [saleDate, setSaleDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [printReceipt, setPrintReceipt] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<"cash" | "bankTransfer" | "debitCard" | "creditCard" | "qris" | "eWallet" | "debt">("cash");
+  const [customerName, setCustomerName] = useState("");
+  const [saleNote, setSaleNote] = useState("");
+  const [receipt, setReceipt] = useState<{ number: string; customer: string; lines: CartItem[]; subtotal: number; paid: number; change: number; method: string; date: Date } | null>(null);
   const [notice, setNotice] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -80,7 +92,10 @@ function PointOfSale() {
   const subtotal = cart.reduce((sum, i) => sum + i.product.price * i.quantity, 0);
   const payment = Number(paid) || 0;
   const diff = payment - subtotal;
-  const canPay = cart.length > 0 && payment >= subtotal;
+  const isDebt = paymentMethod === "debt";
+  const hasDebt = payment < subtotal;
+  const hasNamedCustomer = Boolean(selectedCustomerId && customerName.trim());
+  const canPay = cart.length > 0 && (isDebt || payment >= subtotal) && (!hasDebt || hasNamedCustomer);
 
   // Saran nominal cepat: uang pas + pembulatan
   const suggestions = useMemo(() => {
@@ -193,23 +208,42 @@ function PointOfSale() {
   }
 
   async function checkout() {
-    const changeValue = payment - subtotal;
+    const tendered = payment;
+    if (tendered < subtotal && !hasNamedCustomer) {
+      setNotice({ type: "error", text: "Pilih pelanggan bernama sebelum mencatat hutang." });
+      return;
+    }
+    const changeValue = tendered - subtotal;
+    const completedCart = cart.map((item) => ({ ...item }));
+    const completedSubtotal = subtotal;
+    const completedPayment = payment;
+    const completedCustomer = customerName.trim() || "Pelanggan umum";
     setIsSubmitting(true);
     try {
-      await checkoutSale({
+      const receiptNumber = await checkoutSale({
         lines: cart.map(({ product, quantity }) => ({
           productId: product.id,
           quantity,
         })),
-        amountTendered: payment,
-        method: "cash",
+        amountTendered: tendered,
+        method: isDebt ? "cash" : paymentMethod,
+        customerName: completedCustomer,
+        customerId: selectedCustomerId ?? undefined,
+        note: saleNote,
+        soldAt: new Date(`${saleDate}T12:00:00`).getTime(),
       });
+      if (printReceipt) setReceipt({ number: receiptNumber, customer: completedCustomer, lines: completedCart, subtotal: completedSubtotal, paid: completedPayment, change: paymentMethod === "cash" ? completedPayment - completedSubtotal : 0, method: paymentMethod, date: new Date(`${saleDate}T12:00:00`) });
       setNotice({
         type: "success",
         text: `Penjualan berhasil · ${currency(subtotal)}${changeValue > 0 ? ` · Kembalian ${currency(changeValue)}` : ""}`,
       });
       setCart([]);
       setPaid("");
+      setPaymentMethod("cash");
+      setSelectedCustomerId(null);
+      setCustomerSearch("");
+      setCustomerName("");
+      setSaleNote("");
       setQuery("");
       inputRef.current?.focus();
     } catch (caught) {
@@ -518,21 +552,50 @@ function PointOfSale() {
             </div>
           </div>
 
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+            <label className="space-y-1 text-sm font-medium">
+              Nama pelanggan
+              <span className="relative block">
+                <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Input value={customerSearch} onChange={(e) => { setCustomerSearch(e.target.value); setCustomerName(e.target.value); setSelectedCustomerId(null); setShowCustomerMatches(true); }} onFocus={() => setShowCustomerMatches(true)} onKeyDown={(e) => { if (e.key === "Escape") setShowCustomerMatches(false); if (e.key === "Enter" && customerMatches.length === 1) { e.preventDefault(); setSelectedCustomerId(customerMatches[0]._id); setCustomerName(customerMatches[0].name); setCustomerSearch(customerMatches[0].name); setShowCustomerMatches(false); } }} placeholder="Cari nama / nomor HP pelanggan" maxLength={120} className="pl-9" autoComplete="off" />
+                {showCustomerMatches && customerSearch.trim() && <span className="absolute z-30 mt-1 block max-h-48 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg">{customerMatches.length ? customerMatches.map((customer) => <button key={customer._id} type="button" onClick={() => { setSelectedCustomerId(customer._id); setCustomerName(customer.name); setCustomerSearch(customer.name); setShowCustomerMatches(false); }} className="block w-full border-b px-3 py-2 text-left last:border-0 hover:bg-blue-50"><span className="block">{customer.name}</span><span className="text-xs font-normal text-gray-500">{customer.phone || customer.email || ""}</span></button>) : <span className="block p-3 text-xs font-normal text-gray-500">Pelanggan tidak ditemukan. <a href="/admin/pelanggan" className="text-blue-600 underline">Kelola pelanggan</a></span>}</span>}
+              </span>
+              {!customerSearch && <a href="/admin/pelanggan" className="block text-xs font-normal text-blue-600 hover:underline">Kelola pelanggan</a>}
+            </label>
+            <label className="space-y-1 text-sm font-medium">
+              Metode pembayaran
+              <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value as typeof paymentMethod)} className="h-10 w-full rounded-md border border-gray-200 bg-white px-3 text-sm">
+                <option value="cash">Tunai</option><option value="qris">QRIS</option><option value="bankTransfer">Transfer bank</option><option value="debitCard">Kartu debit</option><option value="creditCard">Kartu kredit</option><option value="eWallet">Dompet digital</option><option value="debt">Hutang / bayar nanti</option>
+              </select>
+            </label>
+          </div>
+          <label className="block space-y-1 text-sm font-medium">
+            Catatan transaksi
+            <Input value={saleNote} onChange={(e) => setSaleNote(e.target.value)} placeholder="Opsional" maxLength={500} />
+          </label>
+
+          <div className="space-y-2">
+            <label htmlFor="sale-date" className="block text-sm font-medium">Tanggal penjualan</label>
+            <Input id="sale-date" type="date" value={saleDate} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setSaleDate(e.target.value)} required />
+          </div>
+
           <div className="space-y-2">
             <label htmlFor="paid" className="block text-sm font-medium">
-              Uang diterima
+              {isDebt ? "Pembayaran awal (opsional)" : paymentMethod === "cash" ? "Uang diterima" : "Nominal pembayaran"}
             </label>
             <Input
               id="paid"
               type="number"
               inputMode="numeric"
               min="0"
+              max={subtotal}
               value={paid}
               onChange={(e) => setPaid(e.target.value)}
-              placeholder="Masukkan nominal"
+              placeholder={isDebt ? "Kosongkan jika belum membayar" : "Masukkan nominal"}
               className="h-11 text-right text-base font-semibold tabular-nums"
             />
-            {suggestions.length > 0 && (
+            {isDebt && <p className="text-xs text-amber-700">Sisa {currency(Math.max(subtotal - payment, 0))} akan dicatat sebagai hutang.</p>}
+            {!isDebt && suggestions.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {suggestions.map((amount, i) => (
                   <button
@@ -556,22 +619,42 @@ function PointOfSale() {
                 : "bg-orange-50 text-orange-700"
               }`}
           >
-            <span>{cart.length === 0 || diff >= 0 ? "Kembalian" : "Kurang bayar"}</span>
+            <span>{cart.length === 0 ? "Kembalian" : diff >= 0 ? "Kembalian" : isDebt ? "Sisa hutang" : "Kurang bayar"}</span>
             <span className="tabular-nums">
               {cart.length === 0 ? currency(0) : currency(Math.abs(diff))}
             </span>
           </div>
 
-          <Button type="button" className="h-11 w-full" disabled={!canPay || isSubmitting} isLoading={isSubmitting} onClick={() => void checkout()}>
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
+            <input type="checkbox" checked={printReceipt} onChange={(e) => setPrintReceipt(e.target.checked)} className="h-4 w-4 rounded border-gray-300" />
+            Cetak struk setelah penjualan
+          </label>
+          {hasDebt && !hasNamedCustomer && <p className="text-xs text-red-600">Pilih pelanggan yang sudah terdaftar dan memiliki nama untuk mencatat hutang.</p>}
+          <Button type="button" className="h-11 w-full" disabled={!canPay || isSubmitting || !saleDate} isLoading={isSubmitting} onClick={() => void checkout()}>
             <Check size={16} className="mr-1" /> Selesaikan penjualan
           </Button>
           <p className="text-center text-xs text-gray-500">
             {canPay
               ? "Tekan untuk menyelesaikan transaksi."
-              : "Tombol aktif setelah pembayaran mencukupi."}
+              : hasDebt && !hasNamedCustomer
+                ? "Hutang hanya dapat dicatat untuk pelanggan bernama."
+                : "Tombol aktif setelah pembayaran mencukupi atau metode hutang dipilih."}
           </p>
         </aside>
       </div>
+
+      {receipt && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-label="Struk transaksi">
+          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl print:max-w-none print:shadow-none">
+            <div id="sale-receipt" className="space-y-3 text-sm text-gray-900">
+              <div className="text-center"><h2 className="text-lg font-bold">Struk Penjualan</h2><p>{receipt.number}</p><p>{receipt.date.toLocaleString("id-ID")}</p></div>
+              <div className="border-y border-dashed py-2"><p>Pelanggan: {receipt.customer}</p>{receipt.lines.map(({ product, quantity }) => <div key={product.id} className="flex justify-between gap-2"><span>{product.name} × {quantity}</span><span>{currency(product.price * quantity)}</span></div>)}</div>
+              <div className="space-y-1"><div className="flex justify-between font-bold"><span>Total</span><span>{currency(receipt.subtotal)}</span></div><div className="flex justify-between"><span>Dibayar ({receipt.method})</span><span>{currency(receipt.paid)}</span></div>{receipt.method === "cash" && <div className="flex justify-between"><span>Kembalian</span><span>{currency(receipt.change)}</span></div>}</div>
+            </div>
+            <div className="mt-5 flex gap-2 print:hidden"><Button className="flex-1" onClick={() => window.print()}>Cetak struk</Button><Button variant="ghost" onClick={() => setReceipt(null)}>Tutup</Button></div>
+          </div>
+        </div>
+      )}
 
       {/* Toast */}
       {notice && (

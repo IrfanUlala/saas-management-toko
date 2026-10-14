@@ -60,9 +60,11 @@ export const checkout = mutation({
     amountTendered: v.number(),
     method: paymentMethod,
     customerName: v.optional(v.string()),
+    customerId: v.optional(v.id("customers")),
     note: v.optional(v.string()),
+    soldAt: v.optional(v.number()),
   },
-  returns: v.id("sales"),
+  returns: v.string(),
   handler: async (ctx, args) => {
     const access = await requireStore(ctx);
     if (
@@ -75,6 +77,10 @@ export const checkout = mutation({
     }
 
     const now = Date.now();
+    const soldAt = args.soldAt ?? now;
+    if (!Number.isFinite(soldAt) || soldAt > now) {
+      throw new ConvexError("Tanggal penjualan tidak valid.");
+    }
     const lines = await Promise.all(
       args.lines.map(async (line) => {
         if (!Number.isFinite(line.quantity) || line.quantity <= 0) {
@@ -109,8 +115,13 @@ export const checkout = mutation({
       (sum, line) => sum + line.quantity * line.product.salePrice,
       0,
     );
-    if (!Number.isFinite(subtotal) || args.amountTendered < subtotal) {
-      throw new ConvexError("Pembayaran belum mencukupi total penjualan.");
+    if (!Number.isFinite(subtotal)) {
+      throw new ConvexError("Total penjualan tidak valid.");
+    }
+    const customerNameInput = args.customerName?.trim();
+    const hasDebt = args.amountTendered < subtotal;
+    if (hasDebt && (!args.customerId || !customerNameInput)) {
+      throw new ConvexError("Pilih pelanggan yang memiliki nama sebelum mencatat hutang.");
     }
 
     const settings = await ctx.db
@@ -126,22 +137,32 @@ export const checkout = mutation({
       updatedAt: now,
     });
 
-    const customerName = args.customerName?.trim() || "Pelanggan umum";
+    let customerId: typeof args.customerId;
+    let customerName = args.customerName?.trim() || "Pelanggan umum";
+    if (args.customerId) {
+      const customer = await ctx.db.get(args.customerId);
+      if (!customer || customer.storeId !== access.store._id || customer.status !== "active") {
+        throw new ConvexError("Pelanggan tidak ditemukan atau sudah nonaktif.");
+      }
+      customerId = customer._id;
+      customerName = customer.name;
+    }
     const saleId = await ctx.db.insert("sales", {
       storeId: access.store._id,
       receiptNumber,
       cashierId: access.userId,
+      customerId,
       customerName,
       subtotal,
       discountAmount: 0,
       taxAmount: 0,
       totalAmount: subtotal,
-      amountPaid: subtotal,
-      changeAmount: args.amountTendered - subtotal,
-      paymentStatus: "paid",
+      amountPaid: Math.min(args.amountTendered, subtotal),
+      changeAmount: Math.max(args.amountTendered - subtotal, 0),
+      paymentStatus: args.amountTendered >= subtotal ? "paid" : args.amountTendered > 0 ? "partial" : "unpaid",
       status: "completed",
       note: args.note?.trim() || undefined,
-      soldAt: now,
+      soldAt,
       updatedAt: now,
     });
 
@@ -186,15 +207,17 @@ export const checkout = mutation({
         createdAt: now,
       });
     }
-    await ctx.db.insert("salePayments", {
-      storeId: access.store._id,
-      saleId,
-      method: args.method,
-      amount: subtotal,
-      paidAt: now,
-      receivedBy: access.userId,
-    });
-    return saleId;
+    if (args.amountTendered > 0) {
+      await ctx.db.insert("salePayments", {
+        storeId: access.store._id,
+        saleId,
+        method: args.method,
+        amount: Math.min(args.amountTendered, subtotal),
+        paidAt: now,
+        receivedBy: access.userId,
+      });
+    }
+    return receiptNumber;
   },
 });
 

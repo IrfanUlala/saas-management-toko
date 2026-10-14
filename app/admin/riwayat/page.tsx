@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useMutation, useQuery } from "convex/react";
 import { useConvexAuth } from "@convex-dev/auth/react";
-import { Pencil, Search, X } from "lucide-react";
+import { Pencil, Printer, Search, X } from "lucide-react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
@@ -68,6 +68,24 @@ function localDateTime(timestamp: number) {
   ).toISOString().slice(0, 16);
 }
 
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  })[character] ?? character);
+}
+
+function printReceipt(transaction: Transaction) {
+  const printWindow = window.open("", "_blank", "width=420,height=650");
+  if (!printWindow) return;
+  const rows = transaction.items.map((item) => `<tr><td>${escapeHtml(item.name)}<br>${item.quantity} × ${currency(item.price)}</td><td>${currency(item.quantity * item.price)}</td></tr>`).join("");
+  printWindow.document.write(`<!doctype html><html><head><title>Struk ${escapeHtml(transaction.id)}</title><style>body{font:14px Arial,sans-serif;max-width:360px;margin:24px auto;color:#111}h1,p{text-align:center}table{width:100%;border-collapse:collapse}td{padding:8px 0;border-bottom:1px dashed #aaa}td:last-child{text-align:right}footer{margin-top:12px;text-align:right;font-weight:bold}@media print{body{margin:0 auto}}</style></head><body><h1>Struk Penjualan</h1><p>${escapeHtml(transaction.id)}<br>${escapeHtml(new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short" }).format(new Date(transaction.date)))}</p><p>Pelanggan: ${escapeHtml(transaction.customer)}</p><table>${rows}</table><footer>Total: ${currency(total(transaction))}</footer><p>Pembayaran: ${escapeHtml(transaction.paymentMethod)}</p><script>window.onload=()=>{window.print();window.onafterprint=()=>window.close()}</script></body></html>`);
+  printWindow.document.close();
+}
+
 export default function RiwayatTransaksiPage() {
   return (
     <CatalogStoreGate>
@@ -103,6 +121,11 @@ function SalesHistory() {
     [records],
   );
   const [query, setQuery] = useState("");
+  const [customerFilter, setCustomerFilter] = useState("");
+  const [dateFilter, setDateFilter] = useState(() => {
+    const now = new Date();
+    return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+  });
   const [editing, setEditing] = useState<Transaction | null>(null);
   const [error, setError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -190,9 +213,15 @@ function SalesHistory() {
     }
   }
 
+  const customers = useMemo(
+    () => [...new Set(transactions.map((transaction) => transaction.customer))].sort((a, b) => a.localeCompare(b, "id")),
+    [transactions],
+  );
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();
     return transactions
+      .filter((transaction) => !customerFilter || transaction.customer === customerFilter)
+      .filter((transaction) => !dateFilter || transaction.date.slice(0, 10) === dateFilter)
       .filter((transaction) =>
         `${transaction.id} ${transaction.customer} ${transaction.paymentMethod} ${transaction.status} ${transaction.items.map((item) => item.name).join(" ")}`
           .toLowerCase()
@@ -201,7 +230,7 @@ function SalesHistory() {
       .sort(
         (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
       );
-  }, [transactions, query]);
+  }, [transactions, query, customerFilter, dateFilter]);
   const totalSales = filtered.reduce((sum, transaction) => sum + total(transaction), 0);
 
   useEffect(() => {
@@ -252,15 +281,28 @@ function SalesHistory() {
         <SummaryCard label="Total penjualan" value={currency(totalSales)} />
       </div>
 
-      <div className="relative">
-        <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-        <Input
-          aria-label="Cari transaksi"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Cari ID, pelanggan, barang, atau pembayaran"
-          className="h-11 border-gray-200 pl-9 shadow-none"
-        />
+      <div className="grid gap-3 md:grid-cols-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+          <Input
+            aria-label="Cari transaksi"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Cari ID, barang, atau pembayaran"
+            className="h-11 border-gray-200 pl-9 shadow-none"
+          />
+        </div>
+        <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+          <span className="shrink-0">Pelanggan</span>
+          <select aria-label="Filter nama pelanggan" value={customerFilter} onChange={(event) => setCustomerFilter(event.target.value)} className="h-11 min-w-0 flex-1 rounded-md border border-gray-200 bg-white px-3 font-normal">
+            <option value="">Semua pelanggan</option>
+            {customers.map((customer) => <option key={customer} value={customer}>{customer}</option>)}
+          </select>
+        </label>
+        <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+          <span className="shrink-0">Tanggal</span>
+          <Input aria-label="Filter tanggal penjualan" type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} className="h-11 min-w-0 border-gray-200 shadow-none" />
+        </label>
       </div>
 
       {error && (
@@ -335,7 +377,12 @@ function SalesHistory() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <Button
+                      <div className="flex items-center gap-2">
+                        <Button type="button" variant="outline" size="sm" onClick={() => printReceipt(transaction)}>
+                          <Printer size={14} className="mr-1.5" />
+                          Cetak
+                        </Button>
+                        <Button
                         type="button"
                         variant="outline"
                         size="sm"
@@ -350,6 +397,7 @@ function SalesHistory() {
                         <Pencil size={14} className="mr-1.5" />
                         Edit
                       </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
